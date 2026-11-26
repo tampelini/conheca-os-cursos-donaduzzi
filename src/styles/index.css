@@ -334,6 +334,14 @@ html.kiosk.massa {
   outline: 0.2rem solid color-mix(in srgb, var(--m-blue) 35%, transparent);
   outline-offset: 0;
 }
+.massa-suggestions {
+  scrollbar-width: none;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+}
+.massa-suggestions::-webkit-scrollbar {
+  display: none;
+}
 .massa-input[aria-invalid='true'] {
   border-color: var(--m-red);
 }

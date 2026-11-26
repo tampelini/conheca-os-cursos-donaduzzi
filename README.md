@@ -65,14 +65,18 @@ mesmo app, com o mesmo banco local (IndexedDB), o mesmo painel protegido por PIN
 
 - **Como abrir:** `…/#/massa` abre a pesquisa e `…/#/quiz` abre o quiz. Para o totem ligar direto na pesquisa:
   *Painel → Pesquisa Massa FM → Totem, textos e consentimento → Experiência ao ligar o totem*.
-- **Fluxo do participante:** início → nome completo e telefone com DDD (máscara e validação) → perguntas, uma por tela →
-  consentimento (caixa obrigatória e caixa opcional de comunicações, ambas desmarcadas) → agradecimento com animação.
-  Depois de alguns segundos a tela é limpa e volta ao início. Preenchimento abandonado é apagado após o tempo de
-  inatividade configurado.
+- **Fluxo do participante:** início → nome completo, telefone com DDD (máscara e validação) e, na mesma tela, o aceite
+  em formato discreto (caixa obrigatória e caixa opcional de comunicações, ambas desmarcadas; sem a obrigatória não se
+  avança) → perguntas, uma por tela, com "Finalizar" na última → agradecimento com animação. Depois de alguns segundos
+  a tela é limpa e volta ao início. Preenchimento abandonado é apagado após o tempo de inatividade configurado.
+- **Sugestões de nome:** ao digitar o nome, o totem mostra botões com nomes e sobrenomes comuns que combinam com as
+  letras digitadas (sem exigir acentos); um toque completa a palavra. A lista é fixa e embutida no app
+  (`src/massa/names.ts`): as sugestões nunca vêm de participantes anteriores.
 - **Telas vertical e horizontal:** a pesquisa ocupa a tela inteira e se adapta às duas orientações (conferido em
   1080 × 1920, 768 × 1024, 1920 × 1080 e 1280 × 800, sem rolagem com as perguntas padrão).
-- **Rodapé de créditos** em todas as telas públicas (componente `MassaFooter`): logotipos do Biopark e da Faculdade
-  Donaduzzi e o crédito de desenvolvimento. Os créditos aparecem também na tela de login do painel e em *Sobre o sistema*.
+- **Rodapé de créditos** em todas as telas públicas (componente `MassaFooter`): logotipo da Faculdade Donaduzzi e o
+  crédito de desenvolvimento. Tocar no logotipo abre <https://tampelini.github.io/cd-ia-donaduzzi/> em outra aba (no
+  APK, no navegador do aparelho); o link é editável no painel e pode ser deixado vazio. Os créditos aparecem também na tela de login do painel e em *Sobre o sistema*.
 
 ### Logotipos oficiais
 
@@ -81,12 +85,10 @@ mesmo app, com o mesmo banco local (IndexedDB), o mesmo painel protegido por PIN
   recorte nem distorção, como um selo de cantos arredondados. Para trocar, envie outro arquivo oficial em *Painel →
   Pesquisa Massa FM → Totem, textos e consentimento → Logotipos oficiais*.
 - **Faculdade Donaduzzi:** o mesmo logotipo do quiz.
-- **Biopark:** o arquivo oficial ainda **não foi fornecido**. Nada foi inventado nem copiado: o rodapé cita o parceiro só
-  pelo nome, em texto simples, até o arquivo ser enviado no mesmo lugar do painel (PNG ou SVG, até 1,5 MB).
 
 A Massa FM é a identidade dominante: as cores padrão foram lidas do logotipo oficial da rádio, com laranja `#f7a819`
 no fundo das telas (o logotipo se funde a ele), roxo `#732281` nos botões e títulos e azul `#0059db` na seleção e nos
-detalhes. Biopark e Faculdade Donaduzzi aparecem só no rodapé, pequeno e discreto. Podem ser trocadas no painel pelos códigos do manual da marca.
+detalhes. A Faculdade Donaduzzi aparece só no rodapé, pequeno e discreto. Podem ser trocadas no painel pelos códigos do manual da marca.
 
 ### Painel: aba "Pesquisa Massa FM"
 
@@ -342,11 +344,11 @@ scripts/       geração de ícones e verificação offline
 
 ## Testes
 
-`npm test` roda 90 testes: banco de perguntas (60 ativas, IDs únicos, gabarito, pendentes inativas), sorteio (10 perguntas, distribuição,
+`npm test` roda 99 testes: banco de perguntas (60 ativas, IDs únicos, gabarito, pendentes inativas), sorteio (10 perguntas, distribuição,
 sem duplicatas, embaralhamento preservando a correta, posições variadas, inativas excluídas, anti-repetição),
 pontuação e faixas de mensagem, tempo esgotado, conclusão, reinício por inatividade (partida e tela de cursos),
 persistência no IndexedDB, estatísticas/CSV (por pergunta, por tema e por perfil), perfil anônimo, pesquisa (fluxo,
-comparação, relatório), PIN, fluxos completos do jogo e do painel administrativo e a Pesquisa Massa FM (máscara e validação de telefone, fluxo
-do participante, consentimento, telefone duplicado por evento, falha de gravação, inatividade, tipos de pergunta,
+comparação, relatório), PIN, fluxos completos do jogo e do painel administrativo e a Pesquisa Massa FM (máscara e validação de telefone, sugestões de nome,
+fluxo do participante, consentimento, telefone duplicado por evento, falha de gravação, inatividade, tipos de pergunta,
 filtros, totais, CSV, anonimização e as seções do painel).
 `npm run verify:offline` confere o pré-cache do Service Worker.

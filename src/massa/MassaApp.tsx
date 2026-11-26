@@ -9,12 +9,13 @@ import { useAppData } from '../store/AppDataContext';
 import { MassaFooter, MassaLogo, massaThemeStyle } from './MassaBrand';
 import { DuplicatePhoneError, phoneAlreadyInEvent, resolveActive, submitParticipation, useMassa } from './store';
 import { isAnswered, isWebUrl, maskPhone, missingRequired, nameError, phoneError } from './validation';
+import { applySuggestion, suggestNames } from './names';
 import type { MassaDraftAnswers, MassaQuestion } from './types';
 
-type Phase = 'start' | 'identify' | 'questions' | 'consent' | 'thanks';
+type Phase = 'start' | 'identify' | 'questions' | 'thanks';
 
 const DUPLICATE_MESSAGE = 'Este telefone já participou desta pesquisa neste evento. Obrigado pelo carinho! Cada pessoa participa uma vez.';
-const SAVE_ERROR_MESSAGE = 'Não foi possível salvar agora. Seus dados continuam na tela: toque em FINALIZAR para tentar de novo.';
+const SAVE_ERROR_MESSAGE = 'Não foi possível salvar agora. Seus dados continuam guardados: toque em FINALIZAR para tentar de novo.';
 
 interface Draft {
   name: string;
@@ -26,7 +27,10 @@ interface Draft {
 // Consentimentos sempre começam desmarcados.
 const emptyDraft = (): Draft => ({ name: '', phone: '', answers: {}, consent: false, marketing: false });
 
-/** Caixa de seleção grande, acionada por toque (o texto todo é clicável). */
+/**
+ * Caixa de aceite discreta: texto pequeno, sem cartão. O texto todo é clicável e a
+ * área de toque continua grande. Sempre começa desmarcada.
+ */
 function CheckRow({ checked, onChange, children, testId }: { checked: boolean; onChange: (v: boolean) => void; children: ReactNode; testId?: string }) {
   return (
     <button
@@ -35,10 +39,12 @@ function CheckRow({ checked, onChange, children, testId }: { checked: boolean; o
       aria-checked={checked}
       data-testid={testId}
       onClick={() => onChange(!checked)}
-      className="flex w-full items-start gap-[1rem] rounded-[1.1rem] border-[0.15rem] border-[#d5d9ee] bg-[#f4f6ff] p-[1rem] text-left aria-checked:border-[color:var(--m-blue)]"
+      className="flex min-h-[max(2.4rem,48px)] w-full items-start gap-[0.7rem] rounded-[0.8rem] px-[0.3rem] py-[0.25rem] text-left active:bg-[#eef1fb]"
     >
-      <span className="massa-check mt-[0.1rem] rounded-[0.5rem]">{checked && <Check aria-hidden="true" className="h-[1.8rem] w-[1.8rem]" strokeWidth={3.5} />}</span>
-      <span className="text-[1.15rem] font-medium leading-snug">{children}</span>
+      <span className="massa-check mt-[0.05rem] h-[1.9rem] w-[1.9rem] rounded-[0.4rem]">
+        {checked && <Check aria-hidden="true" className="h-[1.4rem] w-[1.4rem]" strokeWidth={3.5} />}
+      </span>
+      <span className="text-[0.82rem] font-medium leading-snug text-[#3c4270]">{children}</span>
     </button>
   );
 }
@@ -148,6 +154,8 @@ export function MassaApp() {
   const [link, setLink] = useState<{ label: string; url: string } | null>(null);
   const secretTap = useSecretCorner();
   const mainRef = useRef<HTMLDivElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const nameSuggestions = useMemo(() => (phase === 'identify' ? suggestNames(draft.name) : []), [phase, draft.name]);
 
   // O título da aba e a escala da tela são os da pesquisa enquanto ela está aberta.
   const { settings } = useAppData();
@@ -191,8 +199,7 @@ export function MassaApp() {
   const nameErr = nameError(draft.name);
   const phoneErr = phoneError(draft.phone);
   const identified = !nameErr && !phoneErr;
-  const missing = missingRequired(questions, draft.answers);
-  const canFinish = identified && missing.length === 0 && draft.consent && !busy && !!active;
+  const canFinish = identified && missingRequired(questions, draft.answers).length === 0 && draft.consent && !busy && !!active;
 
   const go = (next: Phase) => {
     setMessage(null);
@@ -205,42 +212,6 @@ export function MassaApp() {
     enterFullscreenAnyOrientation();
     playSound('start');
     go('identify');
-  };
-
-  const afterIdentify = async () => {
-    setTouched({ name: true, phone: true });
-    if (!identified || !active || busy) return;
-    setBusy(true);
-    try {
-      // Evita que a pessoa responda tudo para só no fim saber que já participou.
-      if (await phoneAlreadyInEvent(active.event.id, draft.phone)) {
-        setMessage(DUPLICATE_MESSAGE);
-        return;
-      }
-    } catch {
-      // Sem conseguir consultar agora: a checagem é refeita ao finalizar.
-    } finally {
-      setBusy(false);
-    }
-    setIndex(0);
-    go(questions.length ? 'questions' : 'consent');
-  };
-
-  const question = questions[index];
-  const nextQuestion = () => {
-    playSound('next');
-    if (index < questions.length - 1) setIndex(index + 1);
-    else go('consent');
-  };
-  const back = () => {
-    if (phase === 'identify') reset();
-    else if (phase === 'questions') index > 0 ? setIndex(index - 1) : go('identify');
-    else if (phase === 'consent') {
-      if (questions.length) {
-        setIndex(questions.length - 1);
-        go('questions');
-      } else go('identify');
-    }
   };
 
   const finish = async () => {
@@ -260,6 +231,40 @@ export function MassaApp() {
     } finally {
       setBusy(false);
     }
+  };
+
+  // Identificação e aceite ficam na mesma tela: sem o aceite, ninguém avança.
+  const afterIdentify = async () => {
+    setTouched({ name: true, phone: true });
+    if (!identified || !draft.consent || !active || busy) return;
+    if (!questions.length) return finish();
+    setBusy(true);
+    try {
+      // Evita que a pessoa responda tudo para só no fim saber que já participou.
+      if (await phoneAlreadyInEvent(active.event.id, draft.phone)) {
+        setMessage(DUPLICATE_MESSAGE);
+        return;
+      }
+    } catch {
+      // Sem conseguir consultar agora: a checagem é refeita ao finalizar.
+    } finally {
+      setBusy(false);
+    }
+    setIndex(0);
+    go('questions');
+  };
+
+  const question = questions[index];
+  const isLastQuestion = index >= questions.length - 1;
+  const nextQuestion = () => {
+    if (isLastQuestion) return void finish();
+    playSound('next');
+    setMessage(null);
+    setIndex(index + 1);
+  };
+  const back = () => {
+    if (phase === 'identify') reset();
+    else if (phase === 'questions') index > 0 ? (setMessage(null), setIndex(index - 1)) : go('identify');
   };
 
   const header = (stepLabel: string) => (
@@ -308,7 +313,7 @@ export function MassaApp() {
           {header('Seus dados')}
           <main ref={mainRef} className="massa-main items-center px-[1.6rem] py-[1.2rem] landscape:py-[0.8rem]">
             <form
-              className="massa-card my-auto flex w-full max-w-[40rem] flex-col gap-[1.1rem] p-[1.8rem]"
+              className="massa-card my-auto flex w-full max-w-[40rem] flex-col gap-[0.6rem] p-[1.5rem] landscape:max-w-[78rem] landscape:p-[1.4rem]"
               noValidate
               autoComplete="off"
               onSubmit={(e) => {
@@ -316,10 +321,16 @@ export function MassaApp() {
                 void afterIdentify();
               }}
             >
-              <h1 className="font-display text-[2.2rem] font-extrabold leading-tight text-[color:var(--m-navy)]">Quem está participando?</h1>
-              <label className="flex flex-col gap-[0.4rem]">
-                <span className="text-[1.25rem] font-bold">Nome completo</span>
+              <h1 className="font-display text-[1.8rem] font-extrabold leading-tight text-[color:var(--m-navy)]">Quem está participando?</h1>
+              <div className="grid gap-[0.5rem] landscape:grid-cols-2 landscape:gap-x-[2rem]">
+              <div className="flex min-w-0 flex-col gap-[0.3rem]">
+              <div className="flex flex-col gap-[0.4rem]">
+                <label htmlFor="massa-nome" className="text-[1.25rem] font-bold">
+                  Nome completo
+                </label>
                 <input
+                  ref={nameRef}
+                  id="massa-nome"
                   className="massa-input"
                   name="massa-nome"
                   type="text"
@@ -334,12 +345,41 @@ export function MassaApp() {
                   onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
                   onBlur={() => setTouched((t) => ({ ...t, name: true }))}
                 />
-                <span id="massa-name-error" role="status" className="min-h-[1.4rem] text-[1.05rem] font-semibold text-[#a3111f]">
+                {/*
+                  Sugestões de uma lista fixa de nomes comuns (nunca de outros participantes).
+                  A faixa tem altura fixa e rola de lado, para a tela não pular enquanto se digita.
+                */}
+                <div
+                  role="group"
+                  aria-label="Sugestões de nome"
+                  data-testid="massa-name-suggestions"
+                  className="massa-suggestions flex min-h-[3.4rem] items-center gap-[0.5rem] overflow-x-auto"
+                >
+                  {nameSuggestions.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      // Sem tirar o foco do campo: o teclado do totem continua aberto.
+                      onPointerDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setDraft((d) => ({ ...d, name: applySuggestion(d.name, s) }));
+                        nameRef.current?.focus();
+                      }}
+                      className="min-h-[3.2rem] shrink-0 rounded-full border-[0.15rem] border-[color:var(--m-blue)] bg-[#eef4ff] px-[1.1rem] text-[1.3rem] font-bold text-[color:var(--m-blue)] active:scale-95"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                  {nameSuggestions.length === 0 && !draft.name.trim() && (
+                    <span className="text-[1.05rem] font-medium text-[#4a5080]">Digite as primeiras letras e toque no nome sugerido.</span>
+                  )}
+                </div>
+                <span id="massa-name-error" role="status" className="min-h-[1.2rem] text-[0.95rem] font-semibold leading-tight text-[#a3111f]">
                   {touched.name ? nameErr : ''}
                 </span>
-              </label>
+              </div>
               <label className="flex flex-col gap-[0.4rem]">
-                <span className="text-[1.25rem] font-bold">Telefone com DDD (de preferência WhatsApp)</span>
+                <span className="text-[1.25rem] font-bold">Telefone com DDD (WhatsApp)</span>
                 <input
                   className="massa-input"
                   name="massa-telefone"
@@ -357,14 +397,63 @@ export function MassaApp() {
                   }}
                   onBlur={() => setTouched((t) => ({ ...t, phone: true }))}
                 />
-                <span id="massa-phone-error" role="status" className="min-h-[1.4rem] text-[1.05rem] font-semibold text-[#a3111f]">
+                <span id="massa-phone-error" role="status" className="min-h-[1.2rem] text-[0.95rem] font-semibold leading-tight text-[#a3111f]">
                   {touched.phone ? phoneErr : ''}
                 </span>
               </label>
-              {alert}
-              <button type="submit" className="massa-btn w-full" disabled={!identified || busy}>
-                CONTINUAR
-              </button>
+              </div>
+              <div className="flex min-w-0 flex-col gap-[0.5rem] landscape:justify-end">
+                <div className="flex flex-col gap-[0.1rem] border-t border-[#d5d9ee] pt-[0.5rem] landscape:border-t-0 landscape:pt-0">
+                  <CheckRow checked={draft.consent} onChange={(v) => setDraft((d) => ({ ...d, consent: v }))} testId="massa-consent">
+                    {config.consent.requiredText} <strong className="whitespace-nowrap text-[#a3111f]">(obrigatório)</strong>
+                  </CheckRow>
+                  {(privacyOk || regulationOk) && (
+                    <div className="flex flex-wrap gap-x-[1.2rem] pl-[2.9rem]">
+                      {privacyOk && (
+                        <a
+                          href={config.consent.privacyUrl.trim()}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setLink({ label: config.consent.privacyLabel, url: config.consent.privacyUrl.trim() });
+                          }}
+                          className="inline-flex min-h-[max(2rem,48px)] items-center text-[0.86rem] font-bold text-[color:var(--m-blue)] underline underline-offset-4"
+                        >
+                          Ler a {config.consent.privacyLabel}
+                        </a>
+                      )}
+                      {regulationOk && (
+                        <a
+                          href={config.consent.regulationUrl.trim()}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setLink({ label: config.consent.regulationLabel, url: config.consent.regulationUrl.trim() });
+                          }}
+                          className="inline-flex min-h-[max(2rem,48px)] items-center text-[0.86rem] font-bold text-[color:var(--m-blue)] underline underline-offset-4"
+                        >
+                          Ler o {config.consent.regulationLabel}
+                        </a>
+                      )}
+                    </div>
+                  )}
+                  <CheckRow checked={draft.marketing} onChange={(v) => setDraft((d) => ({ ...d, marketing: v }))} testId="massa-marketing">
+                    {config.consent.optionalText} <span className="whitespace-nowrap font-semibold">(opcional)</span>
+                  </CheckRow>
+                </div>
+                {alert}
+                <button type="submit" className="massa-btn w-full" disabled={!identified || !draft.consent || busy}>
+                  {busy ? 'AGUARDE…' : questions.length ? 'CONTINUAR' : 'FINALIZAR'}
+                </button>
+                {identified && !draft.consent && (
+                  <span role="status" className="text-center text-[0.9rem] font-semibold leading-tight text-[#4a5080]">
+                    Marque a caixa de aceite para continuar.
+                  </span>
+                )}
+              </div>
+              </div>
             </form>
           </main>
         </>
@@ -386,67 +475,9 @@ export function MassaApp() {
                 {question.required ? '' : ' (opcional)'}
               </p>
               <QuestionStep question={question} answers={draft.answers} onChange={(v) => setDraft((d) => ({ ...d, answers: { ...d.answers, [question.id]: v } }))} />
-              <button type="button" className="massa-btn w-full" onClick={nextQuestion} disabled={question.required && !isAnswered(question, draft.answers)}>
-                {!question.required && !isAnswered(question, draft.answers) ? 'PULAR' : 'CONTINUAR'}
-              </button>
-            </section>
-          </main>
-        </>
-      )}
-
-      {phase === 'consent' && (
-        <>
-          {header('Para finalizar')}
-          <main ref={mainRef} className="massa-main items-center px-[1.6rem] py-[1.2rem] landscape:py-[0.8rem]">
-            <section className="massa-card my-auto flex w-full max-w-[46rem] flex-col gap-[1rem] p-[1.6rem] landscape:max-w-[70rem] landscape:gap-[0.8rem]">
-              <h1 className="font-display text-[2rem] font-extrabold leading-tight text-[color:var(--m-navy)]">Só falta confirmar</h1>
-              <CheckRow checked={draft.consent} onChange={(v) => setDraft((d) => ({ ...d, consent: v }))} testId="massa-consent">
-                {config.consent.requiredText} <strong className="whitespace-nowrap text-[#a3111f]">(obrigatório)</strong>
-              </CheckRow>
-              {(privacyOk || regulationOk) && (
-                <div className="flex flex-wrap gap-[0.7rem]">
-                  {privacyOk && (
-                    <a
-                      href={config.consent.privacyUrl.trim()}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setLink({ label: config.consent.privacyLabel, url: config.consent.privacyUrl.trim() });
-                      }}
-                      className="inline-flex min-h-[3.2rem] items-center gap-[0.5rem] rounded-full border-[0.15rem] border-[color:var(--m-blue)] px-[1.2rem] text-[1.1rem] font-bold text-[color:var(--m-blue)] underline underline-offset-4"
-                    >
-                      Ler a {config.consent.privacyLabel}
-                    </a>
-                  )}
-                  {regulationOk && (
-                    <a
-                      href={config.consent.regulationUrl.trim()}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setLink({ label: config.consent.regulationLabel, url: config.consent.regulationUrl.trim() });
-                      }}
-                      className="inline-flex min-h-[3.2rem] items-center gap-[0.5rem] rounded-full border-[0.15rem] border-[color:var(--m-blue)] px-[1.2rem] text-[1.1rem] font-bold text-[color:var(--m-blue)] underline underline-offset-4"
-                    >
-                      Ler o {config.consent.regulationLabel}
-                    </a>
-                  )}
-                </div>
-              )}
-              <CheckRow checked={draft.marketing} onChange={(v) => setDraft((d) => ({ ...d, marketing: v }))} testId="massa-marketing">
-                {config.consent.optionalText} <span className="whitespace-nowrap font-semibold text-[#4a5080]">(opcional)</span>
-              </CheckRow>
-              {!identified && <p role="status" className="text-[1.05rem] font-semibold text-[#a3111f]">Volte e confira seu nome e telefone.</p>}
-              {identified && missing.length > 0 && (
-                <p role="status" className="text-[1.05rem] font-semibold text-[#a3111f]">
-                  {missing.length === 1 ? 'Falta responder 1 pergunta obrigatória.' : `Falta responder ${missing.length} perguntas obrigatórias.`} Toque em Voltar.
-                </p>
-              )}
               {alert}
-              <button type="button" className="massa-btn w-full" onClick={() => void finish()} disabled={!canFinish}>
-                {busy ? 'SALVANDO…' : 'FINALIZAR'}
+              <button type="button" className="massa-btn w-full" onClick={nextQuestion} disabled={busy || (question.required && !isAnswered(question, draft.answers))}>
+                {busy ? 'SALVANDO…' : isLastQuestion ? 'FINALIZAR' : !question.required && !isAnswered(question, draft.answers) ? 'PULAR' : 'CONTINUAR'}
               </button>
             </section>
           </main>

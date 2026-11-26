@@ -8,6 +8,7 @@ import {
   saveMassaConfig, saveMassaEvents, saveMassaSurveys, submitParticipation, totalsByQuestion, totalsToCsv, DuplicatePhoneError,
 } from '../massa/store';
 import { maskPhone, nameError, normalizePhone, phoneError } from '../massa/validation';
+import { applySuggestion, FIRST_NAMES, suggestNames, SURNAMES } from '../massa/names';
 import type { MassaDraftAnswers } from '../massa/types';
 
 const NAME = 'Maria Aparecida Souza';
@@ -30,30 +31,30 @@ async function renderMassa() {
   return utils;
 }
 
-async function identify(name = NAME, phone = PHONE) {
+/** Preenche nome e telefone, marca o aceite (na mesma tela) e avança. */
+async function identify(name = NAME, phone = PHONE, marketing = false) {
   fireEvent.click(screen.getByRole('button', { name: 'COMEÇAR' }));
   fireEvent.change(await screen.findByLabelText('Nome completo'), { target: { value: name } });
   fireEvent.change(screen.getByLabelText(/Telefone com DDD/), { target: { value: phone } });
+  fireEvent.click(screen.getByTestId('massa-consent'));
+  if (marketing) fireEvent.click(screen.getByTestId('massa-marketing'));
   fireEvent.click(screen.getByRole('button', { name: 'CONTINUAR' }));
 }
 
-/** Responde as perguntas de escolha única tocando na alternativa informada (ou na primeira). */
+/** Responde as perguntas de escolha única; na última, o botão é FINALIZAR. */
 async function answerQuestions(total: number, pick: string[] = []) {
   for (let i = 1; i <= total; i++) {
     await screen.findByText(`Pergunta ${i} de ${total}`);
     const group = screen.getByRole('radiogroup');
     const option = pick[i - 1] ? within(group).getByRole('radio', { name: pick[i - 1] }) : within(group).getAllByRole('radio')[0];
     fireEvent.click(option);
-    fireEvent.click(screen.getByRole('button', { name: 'CONTINUAR' }));
+    fireEvent.click(screen.getByRole('button', { name: i === total ? 'FINALIZAR' : 'CONTINUAR' }));
   }
 }
 
 async function participate(name = NAME, phone = PHONE, pick: string[] = [], marketing = false) {
-  await identify(name, phone);
+  await identify(name, phone, marketing);
   await answerQuestions(3, pick);
-  fireEvent.click(await screen.findByTestId('massa-consent'));
-  if (marketing) fireEvent.click(screen.getByTestId('massa-marketing'));
-  fireEvent.click(screen.getByRole('button', { name: 'FINALIZAR' }));
   await screen.findByText('Obrigado por participar!');
 }
 
@@ -88,6 +89,84 @@ describe('telefone e nome', () => {
   });
 });
 
+describe('sugestões de nome', () => {
+  it('sugere nomes pela primeira palavra, sem exigir acentos', () => {
+    expect(suggestNames('')).toEqual([]);
+    expect(suggestNames('ma').slice(0, 3)).toEqual(['Maria', 'Marcos', 'Marcelo']);
+    expect(suggestNames('jo')).toContain('João');
+    expect(suggestNames('anton')).toEqual(['Antônio', 'Antônia']);
+    expect(suggestNames('antonio')).toEqual(['Antônio']);
+    expect(suggestNames('  Le')).toContain('Leonardo');
+    expect(suggestNames('zzz')).toEqual([]);
+    expect(suggestNames('a', 4)).toHaveLength(4);
+  });
+
+  it('a partir da segunda palavra sugere sobrenomes, partículas e nomes compostos', () => {
+    // Logo após o espaço: os sobrenomes mais comuns.
+    expect(suggestNames('Maria ').slice(0, 3)).toEqual(['Silva', 'Santos', 'Oliveira']);
+    expect(suggestNames('Maria s').slice(0, 3)).toEqual(['Silva', 'Santos', 'Souza']);
+    expect(suggestNames('Maria d')).toEqual(['da', 'de', 'dos', 'Dias', 'Duarte', 'Domingues']);
+    expect(suggestNames('Maria do')).toEqual(['dos', 'Domingues', 'Douglas']);
+    expect(suggestNames('Maria ap')).toEqual(['Aparecida']);
+    expect(suggestNames('Maria Aparecida so')).toContain('Souza');
+    // Não repete palavra já escrita nem sugere o que já está completo.
+    expect(suggestNames('Silva sil')).not.toContain('Silva');
+    expect(suggestNames('Maria Silva')).not.toContain('Silva');
+    expect(suggestNames('João da ').slice(0, 2)).toEqual(['Silva', 'Santos']);
+  });
+
+  it('completar troca só a palavra em digitação e deixa o espaço', () => {
+    expect(applySuggestion('ma', 'Maria')).toBe('Maria ');
+    expect(applySuggestion('Maria s', 'Silva')).toBe('Maria Silva ');
+    expect(applySuggestion('Maria ', 'Santos')).toBe('Maria Santos ');
+    expect(applySuggestion('João da s', 'Silva')).toBe('João da Silva ');
+  });
+
+  it('as listas não têm repetidos e todos os itens passam na validação de nome', () => {
+    for (const list of [FIRST_NAMES, SURNAMES]) {
+      expect(new Set(list.map((n) => n.toLowerCase())).size).toBe(list.length);
+      for (const n of list) expect(nameError(`${n} Silva Souza`)).toBeNull();
+    }
+  });
+
+  it('no totem, tocar nas sugestões monta o nome completo e mantém o foco no campo', async () => {
+    await renderMassa();
+    fireEvent.click(screen.getByRole('button', { name: 'COMEÇAR' }));
+    const name = await screen.findByLabelText('Nome completo');
+    const box = screen.getByTestId('massa-name-suggestions');
+    expect(box).toHaveTextContent('Digite as primeiras letras e toque no nome sugerido.');
+    name.focus();
+    fireEvent.change(name, { target: { value: 'ma' } });
+    fireEvent.click(within(box).getByRole('button', { name: 'Maria' }));
+    expect(name).toHaveValue('Maria ');
+    expect(name).toHaveFocus();
+    fireEvent.click(within(box).getByRole('button', { name: 'Silva' }));
+    expect(name).toHaveValue('Maria Silva ');
+    fireEvent.change(name, { target: { value: 'Maria Silva so' } });
+    fireEvent.click(within(box).getByRole('button', { name: 'Souza' }));
+    expect(name).toHaveValue('Maria Silva Souza ');
+    // Quem tem um nome fora da lista continua digitando normalmente.
+    fireEvent.change(name, { target: { value: 'Kethelyn Wojciechowski' } });
+    expect(within(box).queryAllByRole('button')).toHaveLength(0);
+    fireEvent.change(screen.getByLabelText(/Telefone com DDD/), { target: { value: PHONE } });
+    fireEvent.click(screen.getByTestId('massa-consent'));
+    expect(screen.getByRole('button', { name: 'CONTINUAR' })).toBeEnabled();
+  });
+
+  it('nunca sugere o nome de quem já participou', async () => {
+    await renderMassa();
+    await participate('Kethelyn Wojciechowski', PHONE);
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'COMEÇAR' }));
+    const name = await screen.findByLabelText('Nome completo');
+    fireEvent.change(name, { target: { value: 'Ke' } });
+    const offered = within(screen.getByTestId('massa-name-suggestions')).queryAllByRole('button').map((b) => b.textContent);
+    expect(offered).toEqual(['Kelly']);
+    fireEvent.change(name, { target: { value: 'Kelly Wo' } });
+    expect(screen.getByTestId('massa-name-suggestions')).not.toHaveTextContent('Wojciechowski');
+  });
+});
+
 describe('totem: fluxo do participante', () => {
   it('mostra a tela inicial com o logotipo oficial da rádio e o rodapé de créditos', async () => {
     await renderMassa();
@@ -101,17 +180,42 @@ describe('totem: fluxo do participante', () => {
     const footer = screen.getByTestId('massa-footer');
     expect(within(footer).getByText('Desenvolvido pela Faculdade Donaduzzi — Curso de Ciência de Dados e Inteligência Artificial.')).toBeInTheDocument();
     expect(within(footer).getByRole('img', { name: 'Faculdade Donaduzzi' })).toBeInTheDocument();
-    // O logotipo do Biopark não foi fornecido: o parceiro aparece só pelo nome, em texto.
-    expect(within(footer).getByText('Biopark')).toBeInTheDocument();
-    expect(within(footer).queryByRole('img', { name: /Biopark/ })).not.toBeInTheDocument();
+    // Só a Faculdade Donaduzzi aparece nos créditos, e o logotipo leva ao site do curso.
+    expect(footer).not.toHaveTextContent('Biopark');
+    const link = within(footer).getByRole('link', { name: /Faculdade Donaduzzi: conheça o curso/ });
+    expect(link).toHaveAttribute('href', 'https://tampelini.github.io/cd-ia-donaduzzi/');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(within(link).getByRole('img', { name: 'Faculdade Donaduzzi' })).toBeInTheDocument();
   });
 
-  it('logotipos enviados no painel substituem o embutido e o espaço reservado', async () => {
+  it('logotipo enviado no painel substitui o embutido', async () => {
     await loadMassa();
-    await saveMassaConfig({ ...DEFAULT_MASSA_CONFIG, logoMassa: 'data:image/png;base64,AAAA', logoBiopark: 'data:image/png;base64,BBBB' });
+    await saveMassaConfig({ ...DEFAULT_MASSA_CONFIG, logoMassa: 'data:image/png;base64,AAAA' });
     await renderMassa();
     expect(screen.getByRole('img', { name: 'Massa FM Toledo 98.5' })).toHaveAttribute('src', 'data:image/png;base64,AAAA');
-    expect(within(screen.getByTestId('massa-footer')).getByRole('img', { name: 'Biopark' })).toHaveAttribute('src', 'data:image/png;base64,BBBB');
+  });
+
+  it('tocar no logotipo da Faculdade abre o site do curso em outra aba, sem sair da pesquisa', async () => {
+    const fake = {} as Window;
+    const open = vi.spyOn(window, 'open').mockReturnValue(fake);
+    await renderMassa();
+    await identify();
+    await screen.findByText('Pergunta 1 de 3');
+    fireEvent.click(within(screen.getByTestId('massa-footer')).getByRole('link'));
+    await waitFor(() => expect(open).toHaveBeenCalledWith('https://tampelini.github.io/cd-ia-donaduzzi/', '_blank'));
+    expect(fake.opener).toBeNull();
+    // A pesquisa continua onde estava.
+    expect(screen.getByText('Pergunta 1 de 3')).toBeInTheDocument();
+  });
+
+  it('sem link configurado, o logotipo da Faculdade não é clicável', async () => {
+    await loadMassa();
+    await saveMassaConfig({ ...DEFAULT_MASSA_CONFIG, creditUrl: '' });
+    await renderMassa();
+    const footer = screen.getByTestId('massa-footer');
+    expect(within(footer).queryByRole('link')).not.toBeInTheDocument();
+    expect(within(footer).getByRole('img', { name: 'Faculdade Donaduzzi' })).toBeInTheDocument();
   });
 
   it('participa do início ao fim, grava no banco e limpa a tela para a próxima pessoa', async () => {
@@ -119,10 +223,19 @@ describe('totem: fluxo do participante', () => {
     await renderMassa();
     fireEvent.click(screen.getByRole('button', { name: 'COMEÇAR' }));
 
-    // Identificação: botão só libera com nome e telefone válidos; a máscara é aplicada.
+    // Identificação e aceite na mesma tela: o botão só libera com nome e telefone
+    // válidos e a caixa obrigatória marcada; a máscara é aplicada.
     const name = await screen.findByLabelText('Nome completo');
     const phone = screen.getByLabelText(/Telefone com DDD/);
     const next = screen.getByRole('button', { name: 'CONTINUAR' });
+    const consent = screen.getByTestId('massa-consent');
+    const marketing = screen.getByTestId('massa-marketing');
+    // As duas caixas começam desmarcadas e trazem os textos do painel.
+    expect(consent).toHaveAttribute('aria-checked', 'false');
+    expect(marketing).toHaveAttribute('aria-checked', 'false');
+    expect(consent).toHaveTextContent(DEFAULT_MASSA_CONFIG.consent.requiredText);
+    expect(marketing).toHaveTextContent(DEFAULT_MASSA_CONFIG.consent.optionalText);
+    expect(screen.getByRole('link', { name: 'Ler a Política de Privacidade' })).toHaveAttribute('href', 'https://massa.com.br/politica-de-privacidade-grupo-massa/');
     expect(next).toBeDisabled();
     fireEvent.change(name, { target: { value: 'Maria' } });
     fireEvent.blur(name);
@@ -133,7 +246,16 @@ describe('totem: fluxo do participante', () => {
     expect(next).toBeDisabled();
     fireEvent.change(phone, { target: { value: PHONE } });
     expect(phone).toHaveValue('(45) 99988-7766');
+    // Dados válidos, mas sem o aceite: não avança (a caixa opcional não substitui a obrigatória).
+    expect(next).toBeDisabled();
+    expect(screen.getByText('Marque a caixa de aceite para continuar.')).toBeInTheDocument();
+    fireEvent.click(marketing);
+    expect(next).toBeDisabled();
+    fireEvent.click(consent);
     expect(next).toBeEnabled();
+    fireEvent.click(consent);
+    expect(next).toBeDisabled();
+    fireEvent.click(consent);
     expect(screen.getByTestId('massa-footer')).toBeInTheDocument();
     fireEvent.click(next);
 
@@ -151,27 +273,12 @@ describe('totem: fluxo do participante', () => {
     fireEvent.click(screen.getByRole('button', { name: 'CONTINUAR' }));
     await screen.findByText('Pergunta 3 de 3');
     expect(screen.getAllByRole('radio')).toHaveLength(6);
-    fireEvent.click(screen.getByRole('radio', { name: 'Sertanejo' }));
     expect(screen.getByTestId('massa-footer')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'CONTINUAR' }));
-
-    // Consentimento: caixas desmarcadas; finalizar só com a obrigatória.
-    const consent = await screen.findByTestId('massa-consent');
-    const marketing = screen.getByTestId('massa-marketing');
-    expect(consent).toHaveAttribute('aria-checked', 'false');
-    expect(marketing).toHaveAttribute('aria-checked', 'false');
-    expect(consent).toHaveTextContent(DEFAULT_MASSA_CONFIG.consent.requiredText);
-    expect(marketing).toHaveTextContent(DEFAULT_MASSA_CONFIG.consent.optionalText);
-    expect(screen.getByRole('link', { name: 'Ler a Política de Privacidade' })).toHaveAttribute('href', 'https://massa.com.br/politica-de-privacidade-grupo-massa/');
+    // A última pergunta finaliza: não há mais tela de aceite no fim.
     const finish = screen.getByRole('button', { name: 'FINALIZAR' });
     expect(finish).toBeDisabled();
-    fireEvent.click(marketing);
-    expect(finish).toBeDisabled();
-    fireEvent.click(consent);
+    fireEvent.click(screen.getByRole('radio', { name: 'Sertanejo' }));
     expect(finish).toBeEnabled();
-    fireEvent.click(consent);
-    expect(finish).toBeDisabled();
-    fireEvent.click(consent);
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const before = Date.now();
     fireEvent.click(finish);
@@ -209,6 +316,9 @@ describe('totem: fluxo do participante', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'COMEÇAR' }));
     expect(await screen.findByLabelText('Nome completo')).toHaveValue('');
     expect(screen.getByLabelText(/Telefone com DDD/)).toHaveValue('');
+    // O aceite do participante anterior não fica marcado para o próximo.
+    expect(screen.getByTestId('massa-consent')).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByTestId('massa-marketing')).toHaveAttribute('aria-checked', 'false');
     expect(document.body.textContent).not.toContain('Maria');
 
     // Nenhum dado pessoal vai para o console.
@@ -246,12 +356,12 @@ describe('totem: fluxo do participante', () => {
   it('se a gravação falhar, mantém o preenchimento e permite tentar de novo', async () => {
     await renderMassa();
     await identify();
-    await answerQuestions(3);
-    fireEvent.click(await screen.findByTestId('massa-consent'));
     const spy = vi.spyOn(db, 'putParticipant').mockRejectedValueOnce(new Error('sem espaço'));
-    fireEvent.click(screen.getByRole('button', { name: 'FINALIZAR' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível salvar agora. Seus dados continuam na tela');
-    expect(screen.getByTestId('massa-consent')).toHaveAttribute('aria-checked', 'true');
+    await answerQuestions(3);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível salvar agora. Seus dados continuam guardados');
+    // Continua na última pergunta, com a resposta marcada.
+    expect(screen.getByText('Pergunta 3 de 3')).toBeInTheDocument();
+    expect(screen.getAllByRole('radio')[0]).toHaveAttribute('aria-checked', 'true');
     expect(await listParticipants()).toHaveLength(0);
     spy.mockRestore();
     fireEvent.click(screen.getByRole('button', { name: 'FINALIZAR' }));
@@ -301,14 +411,16 @@ describe('totem: fluxo do participante', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'TikTok' }));
     fireEvent.click(screen.getByRole('button', { name: 'CONTINUAR' }));
     await screen.findByText('Pergunta 2 de 2');
-    // Opcional e sem resposta: pode pular.
-    fireEvent.click(screen.getByRole('button', { name: 'PULAR' }));
-    fireEvent.click(await screen.findByTestId('massa-consent'));
-    // Voltar preserva o que já foi preenchido.
+    // Voltar preserva o que já foi marcado.
     fireEvent.click(screen.getByRole('button', { name: 'Voltar' }));
-    fireEvent.change(await screen.findByRole('textbox'), { target: { value: '  Toca mais modão!  ' } });
+    await screen.findByText('Pergunta 1 de 2');
+    expect(screen.getByRole('checkbox', { name: 'Instagram' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('checkbox', { name: 'TikTok' })).toHaveAttribute('aria-checked', 'false');
     fireEvent.click(screen.getByRole('button', { name: 'CONTINUAR' }));
-    expect(await screen.findByTestId('massa-consent')).toHaveAttribute('aria-checked', 'true');
+    await screen.findByText('Pergunta 2 de 2');
+    // Opcional: dá para finalizar sem responder; aqui a pessoa escreve um recado.
+    expect(screen.getByRole('button', { name: 'FINALIZAR' })).toBeEnabled();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '  Toca mais modão!  ' } });
     fireEvent.click(screen.getByRole('button', { name: 'FINALIZAR' }));
     await screen.findByText('Obrigado por participar!');
     const [p] = await listParticipants();
@@ -317,6 +429,33 @@ describe('totem: fluxo do participante', () => {
       ['m1', ['Instagram', 'Facebook']],
       ['t1', ['Toca mais modão!']],
     ]);
+  });
+
+  it('pergunta opcional sem resposta e pesquisa sem perguntas também finalizam', async () => {
+    await loadMassa();
+    await saveMassaSurveys([{ id: 'pesquisa-padrao', name: 'Curta', questions: [{ id: 't1', prompt: 'Algum recado?', type: 'text', required: false, active: true, options: [] }] }]);
+    const first = await renderMassa();
+    await identify();
+    await screen.findByText('Pergunta 1 de 1');
+    fireEvent.click(screen.getByRole('button', { name: 'FINALIZAR' }));
+    await screen.findByText('Obrigado por participar!');
+    expect((await listParticipants())[0].answers).toEqual([]);
+    first.unmount();
+
+    // Sem nenhuma pergunta ativa: a identificação com aceite já finaliza.
+    __resetMassaForTests();
+    await loadMassa();
+    await saveMassaSurveys([{ id: 'pesquisa-padrao', name: 'Só cadastro', questions: [] }]);
+    await renderMassa();
+    fireEvent.click(screen.getByRole('button', { name: 'COMEÇAR' }));
+    fireEvent.change(await screen.findByLabelText('Nome completo'), { target: { value: 'Outra Pessoa Silva' } });
+    fireEvent.change(screen.getByLabelText(/Telefone com DDD/), { target: { value: '45999112233' } });
+    const finish = screen.getByRole('button', { name: 'FINALIZAR' });
+    expect(finish).toBeDisabled();
+    fireEvent.click(screen.getByTestId('massa-consent'));
+    fireEvent.click(finish);
+    await screen.findByText('Obrigado por participar!');
+    expect(await listParticipants()).toHaveLength(2);
   });
 
   it('sem evento ativo, a pesquisa fica indisponível', async () => {

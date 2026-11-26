@@ -1,27 +1,13 @@
-import { useAppData } from '../../store/AppDataContext';
 import { Card } from '../../admin/ui';
 import { useMassa } from '../store';
+import { FacultyCreditLogo } from '../MassaBrand';
 
 /** Créditos institucionais: tela de login do painel e seção "Sobre o sistema". */
 export function Credits({ compact = false }: { compact?: boolean }) {
-  const { settings } = useAppData();
   const { config } = useMassa();
   return (
     <div data-testid="credits" className={`flex flex-col items-center gap-3 text-center ${compact ? 'max-w-sm' : ''}`}>
-      <div className="flex flex-wrap items-center justify-center gap-5">
-        {config.logoBiopark ? (
-          <img src={config.logoBiopark} alt="Biopark" className="h-10 w-auto max-w-[9rem] object-contain" />
-        ) : (
-          <span className="rounded-lg border border-dashed border-ink/40 px-3 py-2 text-sm font-bold" aria-label="Biopark (logotipo oficial ainda não enviado)">
-            Biopark
-          </span>
-        )}
-        {settings.logo ? (
-          <img src={settings.logo} alt="Faculdade Donaduzzi" className="h-10 w-auto max-w-[10rem] object-contain" />
-        ) : (
-          <span className="rounded-lg border border-dashed border-ink/40 px-3 py-2 text-sm font-bold">Faculdade Donaduzzi</span>
-        )}
-      </div>
+      <FacultyCreditLogo config={config} imgClass="h-10 w-auto max-w-[10rem] object-contain" linkClass="min-h-[48px] px-2" />
       <p className={`font-semibold text-ink/80 ${compact ? 'text-xs' : 'text-sm'}`}>{config.credit}</p>
     </div>
   );

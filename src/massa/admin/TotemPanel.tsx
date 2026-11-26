@@ -24,6 +24,7 @@ export function validateMassaConfig(c: MassaConfig): string[] {
   if (!c.consent.version.trim()) errors.push('Informe a versão do texto de consentimento.');
   if (!isWebUrl(c.consent.privacyUrl)) errors.push('O link da Política de Privacidade deve começar com http:// ou https://.');
   if (c.consent.regulationUrl.trim() && !isWebUrl(c.consent.regulationUrl)) errors.push('O link do regulamento deve começar com http:// ou https://.');
+  if (c.creditUrl.trim() && !isWebUrl(c.creditUrl)) errors.push('O link do logotipo da Faculdade deve começar com http:// ou https://.');
   if (c.idleSeconds < 15 || c.idleSeconds > 600) errors.push('Retorno por inatividade: entre 15 e 600 segundos.');
   if (c.thanksSeconds < 2 || c.thanksSeconds > 60) errors.push('Tela de agradecimento: entre 2 e 60 segundos.');
   return errors;
@@ -91,7 +92,7 @@ export function TotemPanel() {
   async function save() {
     const errs = validateMassaConfig(c);
     if (errs.length) return setStatus({ tone: 'error', text: errs.join(' ') });
-    await saveMassaConfig({ ...c, title: c.title.trim(), consent: { ...c.consent, version: c.consent.version.trim(), privacyUrl: c.consent.privacyUrl.trim(), regulationUrl: c.consent.regulationUrl.trim() } });
+    await saveMassaConfig({ ...c, title: c.title.trim(), creditUrl: c.creditUrl.trim(), consent: { ...c.consent, version: c.consent.version.trim(), privacyUrl: c.consent.privacyUrl.trim(), regulationUrl: c.consent.regulationUrl.trim() } });
     setStatus({ tone: 'ok', text: 'Configurações da Pesquisa Massa FM salvas.' });
   }
 
@@ -141,6 +142,9 @@ export function TotemPanel() {
           <Field label="Crédito do rodapé">
             <input value={c.credit} onChange={(e) => set('credit', e.target.value)} />
           </Field>
+          <Field label="Link ao tocar no logotipo da Faculdade (rodapé)" hint="Abre em outra aba. Deixe vazio para o logotipo não ser clicável.">
+            <input type="url" placeholder="https://" value={c.creditUrl} onChange={(e) => set('creditUrl', e.target.value)} />
+          </Field>
         </div>
       </Card>
 
@@ -184,14 +188,13 @@ export function TotemPanel() {
 
       <Card title="Logotipos oficiais">
         <Notice tone="info">
-          O logotipo oficial da Massa FM Toledo 98.5 já vem embutido no aplicativo. Para o Biopark, envie o arquivo oficial: enquanto isso, o
-          rodapé cita o Biopark só pelo nome, em texto (nenhum logotipo é desenhado pelo sistema). As imagens são exibidas sem distorção.
+          O logotipo oficial da Massa FM Toledo 98.5 já vem embutido no aplicativo. Envie outro arquivo oficial só se quiser substituí-lo: a imagem é
+          exibida sem distorção.
         </Notice>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <LogoField label="Logotipo Massa FM Toledo 98.5" hint="Envie outro arquivo oficial só se quiser substituir o embutido." value={c.logoMassa} onChange={(v) => set('logoMassa', v)} builtIn={DEFAULT_MASSA_LOGO} />
-          <LogoField label="Logotipo Biopark" hint="Aparece no rodapé branco, ao lado do logotipo da Faculdade Donaduzzi." value={c.logoBiopark} onChange={(v) => set('logoBiopark', v)} />
         </div>
-        <p className="mt-3 text-sm text-ink/60">O logotipo da Faculdade Donaduzzi vem do aplicativo (Configurações → Identidade).</p>
+        <p className="mt-3 text-sm text-ink/60">O logotipo da Faculdade Donaduzzi, usado no rodapé, vem do aplicativo (Configurações → Identidade).</p>
       </Card>
 
       <Card

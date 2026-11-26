@@ -53,9 +53,9 @@ export const DEFAULT_MASSA_CONFIG: MassaConfig = {
   idleSeconds: 60,
   thanksSeconds: 6,
   logoMassa: '',
-  logoBiopark: '',
   colors: DEFAULT_MASSA_COLORS,
   credit: 'Desenvolvido pela Faculdade Donaduzzi — Curso de Ciência de Dados e Inteligência Artificial.',
+  creditUrl: 'https://tampelini.github.io/cd-ia-donaduzzi/',
   consent: {
     version: 'v1',
     requiredText:

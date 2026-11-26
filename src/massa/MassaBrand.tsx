@@ -1,5 +1,7 @@
 import type { CSSProperties } from 'react';
 import { useAppData } from '../store/AppDataContext';
+import { openExternal } from '../services/externalLink';
+import { isWebUrl } from './validation';
 import { DEFAULT_MASSA_LOGO } from './defaults';
 import type { MassaConfig } from './types';
 
@@ -11,25 +13,6 @@ export function massaThemeStyle(config: MassaConfig): CSSProperties {
     '--m-yellow': config.colors.yellow,
     '--m-red': config.colors.red,
   } as CSSProperties;
-}
-
-/**
- * Espaço reservado para um logotipo oficial ainda não enviado no painel.
- * Mostra só o nome em texto: nenhum logotipo é desenhado ou inventado.
- */
-function LogoPlaceholder({ name, className = '', dark = false }: { name: string; className?: string; dark?: boolean }) {
-  return (
-    <div
-      role="img"
-      aria-label={`${name} (logotipo oficial ainda não enviado)`}
-      data-logo-placeholder={name}
-      className={`flex items-center justify-center rounded-xl border-[0.12rem] border-dashed px-[0.8em] text-center font-display font-bold leading-tight ${
-        dark ? 'border-[#14183a]/45 text-[#14183a]' : 'border-[color:var(--m-ink)] text-[color:var(--m-ink)]'
-      } ${className}`}
-    >
-      {name}
-    </div>
-  );
 }
 
 /**
@@ -59,32 +42,49 @@ export function MassaLogo({ config, size = 'lg' }: { config: MassaConfig; size?:
 }
 
 /**
- * Rodapé institucional das telas públicas: Biopark e Faculdade Donaduzzi como
- * parceiros e responsáveis pelo desenvolvimento, sem competir com a Massa FM.
+ * Logotipo da Faculdade Donaduzzi dos créditos. Com um link configurado, tocar nele
+ * abre a página do curso em outra aba (no APK, no navegador do aparelho), sem fechar
+ * a pesquisa.
+ */
+export function FacultyCreditLogo({ config, imgClass, linkClass = '' }: { config: MassaConfig; imgClass: string; linkClass?: string }) {
+  const { settings } = useAppData();
+  const logo = settings.logo ? (
+    <img src={settings.logo} alt="Faculdade Donaduzzi" className={imgClass} />
+  ) : (
+    <span className="font-display font-bold leading-none">Faculdade Donaduzzi</span>
+  );
+  const url = config.creditUrl.trim();
+  if (!isWebUrl(url)) return logo;
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Faculdade Donaduzzi: conheça o curso de Ciência de Dados e Inteligência Artificial (abre o site em outra aba)"
+      onClick={(e) => {
+        // Abre por código: funciona no APK e quando a nova aba é bloqueada.
+        e.preventDefault();
+        void openExternal(url);
+      }}
+      className={`inline-flex items-center justify-center rounded-lg transition-transform active:scale-95 ${linkClass}`}
+    >
+      {logo}
+    </a>
+  );
+}
+
+/**
+ * Rodapé institucional das telas públicas: a Faculdade Donaduzzi aparece como
+ * responsável pelo desenvolvimento, pequena e sem competir com a Massa FM.
  */
 export function MassaFooter({ config, className = '' }: { config: MassaConfig; className?: string }) {
-  const { settings } = useAppData();
   return (
     <footer
       data-testid="massa-footer"
-      className={`flex shrink-0 flex-wrap items-center justify-center gap-x-[1.2rem] gap-y-[0.25rem] bg-white px-[1.2rem] py-[0.45rem] text-[#14183a] ${className}`}
+      className={`flex shrink-0 flex-wrap items-center justify-center gap-x-[1.2rem] gap-y-[0.1rem] bg-white px-[1.2rem] py-[0.2rem] text-[#14183a] ${className}`}
     >
-      <div className="flex items-center gap-[0.9rem]">
-        {config.logoBiopark ? (
-          <img src={config.logoBiopark} alt="Biopark" className="h-[1.6rem] w-auto max-w-[7rem] object-contain" />
-        ) : (
-          // Sem o arquivo oficial, o parceiro é citado só pelo nome, em texto: nenhum logotipo é inventado.
-          <span data-logo-placeholder="Biopark" className="font-display text-[1rem] font-bold leading-none">
-            Biopark
-          </span>
-        )}
-        <span aria-hidden="true" className="h-[1.3rem] w-px bg-[#14183a]/25" />
-        {settings.logo ? (
-          <img src={settings.logo} alt="Faculdade Donaduzzi" className="h-[1.6rem] w-auto max-w-[7rem] object-contain" />
-        ) : (
-          <LogoPlaceholder name="Faculdade Donaduzzi" dark className="h-[1.6rem] w-[8rem] rounded-lg text-[0.62rem]" />
-        )}
-      </div>
+      {/* Área de toque de pelo menos 48 px, mesmo com o logotipo pequeno. */}
+      <FacultyCreditLogo config={config} imgClass="h-[1.6rem] w-auto max-w-[7rem] object-contain" linkClass="min-h-[max(2.4rem,48px)] px-[0.6rem]" />
       <p className="text-center text-[0.72rem] font-medium leading-snug text-[#14183a]/85">{config.credit}</p>
     </footer>
   );

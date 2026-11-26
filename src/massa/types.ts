@@ -74,10 +74,10 @@ export interface MassaConfig {
   thanksSeconds: number;
   /** Logotipo da rádio enviado pelo painel (data URL). Vazio = o oficial embutido no app. */
   logoMassa: string;
-  /** Logotipo do Biopark enviado pelo painel (data URL). Vazio = espaço reservado. */
-  logoBiopark: string;
   colors: MassaColors;
   credit: string;
+  /** Página aberta ao tocar no logotipo da Faculdade no rodapé. Vazio = sem link. */
+  creditUrl: string;
   consent: MassaConsent;
 }
 
