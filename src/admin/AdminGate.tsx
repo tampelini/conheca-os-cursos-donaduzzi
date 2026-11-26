@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Delete, Lock } from 'lucide-react';
 import { verifyPin } from '../services/pin';
-import { Credits } from '../massa/admin/AboutPanel';
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 60_000;
@@ -44,7 +43,7 @@ export function AdminGate({ onUnlock, onCancel }: { onUnlock: () => void; onCanc
   };
 
   return (
-    <div className="admin-root flex min-h-full flex-col items-center justify-center gap-6 bg-bg p-6 text-ink">
+    <div className="admin-root flex min-h-full items-center justify-center bg-bg p-6 text-ink">
       <form
         className="glass w-full max-w-sm rounded-3xl p-6 text-center"
         onSubmit={(e) => {
@@ -88,7 +87,6 @@ export function AdminGate({ onUnlock, onCancel }: { onUnlock: () => void; onCanc
           Entrar
         </button>
       </form>
-      <Credits compact />
     </div>
   );
 }

@@ -55,8 +55,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     applyTheme(settings.colors);
     setSoundEnabled(settings.soundEnabled);
-    // A Pesquisa Massa FM define o próprio título enquanto está aberta.
-    if (!document.documentElement.classList.contains('massa')) document.title = `${settings.gameName} — ${settings.institutionName}`;
+    document.title = `${settings.gameName} — ${settings.institutionName}`;
   }, [settings]);
 
   const updateSettings = useCallback(async (s: Settings) => {

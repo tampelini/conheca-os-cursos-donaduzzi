@@ -58,66 +58,8 @@ Para liberar uma delas: *Painel → Perguntas → Ver pendentes → Editar*, tro
 (alternativa A e explicação), marque *Pergunta ativa* e salve. Enquanto o texto "PREENCHER" existir, a pergunta não
 pode ser ativada nem sorteada. Os mesmos dados faltam na descrição dos cursos (aba *Cursos*).
 
-## Pesquisa Massa FM (segunda experiência do totem)
-
-Além do quiz, o aplicativo traz a **Pesquisa Massa FM**, usada pela Rádio Massa FM Toledo 98.5 em eventos. Ela fica no
-mesmo app, com o mesmo banco local (IndexedDB), o mesmo painel protegido por PIN e o mesmo funcionamento offline.
-
-- **Como abrir:** `…/#/massa` abre a pesquisa e `…/#/quiz` abre o quiz. Para o totem ligar direto na pesquisa:
-  *Painel → Pesquisa Massa FM → Totem, textos e consentimento → Experiência ao ligar o totem*.
-- **Fluxo do participante:** início → nome completo, telefone com DDD (máscara e validação) e, na mesma tela, o aceite
-  em formato discreto (caixa obrigatória e caixa opcional de comunicações, ambas desmarcadas; sem a obrigatória não se
-  avança) → perguntas, uma por tela, com "Finalizar" na última → agradecimento com animação. Depois de alguns segundos
-  a tela é limpa e volta ao início. Preenchimento abandonado é apagado após o tempo de inatividade configurado.
-- **Sugestões de nome:** ao digitar o nome, o totem mostra botões com nomes e sobrenomes comuns que combinam com as
-  letras digitadas (sem exigir acentos); um toque completa a palavra. A lista é fixa e embutida no app
-  (`src/massa/names.ts`): as sugestões nunca vêm de participantes anteriores.
-- **Telas vertical e horizontal:** a pesquisa ocupa a tela inteira e se adapta às duas orientações (conferido em
-  1080 × 1920, 768 × 1024, 1920 × 1080 e 1280 × 800, sem rolagem com as perguntas padrão).
-- **Rodapé de créditos** em todas as telas públicas (componente `MassaFooter`): logotipo da Faculdade Donaduzzi e o
-  crédito de desenvolvimento. Tocar no logotipo abre <https://tampelini.github.io/cd-ia-donaduzzi/> em outra aba (no
-  APK, no navegador do aparelho); o link é editável no painel e pode ser deixado vazio. Os créditos aparecem também na tela de login do painel e em *Sobre o sistema*.
-
-### Logotipos oficiais
-
-- **Massa FM Toledo 98.5:** o logotipo oficial enviado pela rádio está embutido em
-  `public/assets/logo-massa-fm-toledo.png` (512 × 512, com o fundo laranja da marca). Ele aparece inteiro, sem
-  recorte nem distorção, como um selo de cantos arredondados. Para trocar, envie outro arquivo oficial em *Painel →
-  Pesquisa Massa FM → Totem, textos e consentimento → Logotipos oficiais*.
-- **Faculdade Donaduzzi:** o mesmo logotipo do quiz.
-
-A Massa FM é a identidade dominante: as cores padrão foram lidas do logotipo oficial da rádio, com laranja `#f7a819`
-no fundo das telas (o logotipo se funde a ele), roxo `#732281` nos botões e títulos e azul `#0059db` na seleção e nos
-detalhes. A Faculdade Donaduzzi aparece só no rodapé, pequeno e discreto. Podem ser trocadas no painel pelos códigos do manual da marca.
-
-### Painel: aba "Pesquisa Massa FM"
-
-- **Eventos:** nome, descrição, local, datas de início e término, ativo/inativo e pesquisa vinculada. O botão *Usar no
-  totem* define o evento (e, com ele, a pesquisa) em uso. Evento com participantes não pode ser excluído, só desativado.
-- **Pesquisas e perguntas:** criar, duplicar e excluir pesquisas; criar, editar, excluir e reordenar perguntas; tipo de
-  resposta (escolha única, múltipla escolha, texto livre); obrigatória ou opcional; ativa ou inativa; alternativas com
-  adicionar, editar, excluir e reordenar. Vêm três perguntas de exemplo. Nada disso exige alterar o código.
-- **Totem, textos e consentimento:** textos das telas, textos e **versão** do consentimento, links (Política de
-  Privacidade e regulamento), tempo de retorno por inatividade, duração do agradecimento, logotipos e cores.
-- **Participantes e resultados:** lista com data e hora, nome, telefone, evento, pesquisa, respostas e consentimento;
-  filtros por evento, pesquisa, período e resposta; busca por nome ou telefone; totais e percentuais por pergunta;
-  exportação em CSV (`;`, UTF-8, abre no Excel) dos participantes e dos totais; **anonimizar** (apaga nome e telefone,
-  mantém as respostas) ou **excluir** um cadastro.
-
-### Dados pessoais (LGPD)
-
-Diferente do quiz, esta pesquisa coleta **nome e telefone**, sempre com consentimento registrado. Cada participação
-guarda: data e hora, evento, pesquisa, respostas, versão e texto do consentimento aceito e se a pessoa autorizou
-comunicações promocionais.
-
-- O mesmo telefone não participa duas vezes do mesmo evento; a mensagem ao participante não revela dados de ninguém.
-- A lista de participantes só existe no painel, atrás do PIN. Nenhum dado pessoal é escrito no console do navegador.
-- **Os dados ficam somente no aparelho.** Não há servidor nem sincronização: com mais de um totem, exporte o CSV de
-  cada um. Desinstalar o app ou limpar os dados do navegador apaga os participantes, então exporte ao fim de cada evento.
-- **O PIN é uma barreira contra o público, não uma proteção forte.** Troque o PIN padrão (`1234`) antes do evento,
-  mantenha o totem sob guarda da equipe e trate os arquivos CSV exportados como confidenciais.
-- O link da Política de Privacidade abre um QR Code no totem, para a pessoa ler no próprio celular mesmo sem internet
-  no aparelho.
+> A **Pesquisa Massa FM**, que chegou a fazer parte deste aplicativo, agora é um projeto separado:
+> <https://github.com/tampelini/pesquisa-massa-fm>.
 
 ## Scripts
 
@@ -325,7 +267,6 @@ src/
   components/  botões, temporizador, QR Code, fundo animado, confete…
   screens/     Início, Instruções, Perfil, Pesquisa, Pergunta, Resultado, Cursos
   admin/       painel administrativo
-  massa/       Pesquisa Massa FM: telas do totem, rodapé de créditos, dados e painel (massa/admin)
   test/        testes automatizados
 android/       projeto nativo (Capacitor)
 scripts/       geração de ícones e verificação offline
@@ -344,11 +285,9 @@ scripts/       geração de ícones e verificação offline
 
 ## Testes
 
-`npm test` roda 99 testes: banco de perguntas (60 ativas, IDs únicos, gabarito, pendentes inativas), sorteio (10 perguntas, distribuição,
+`npm test` roda 68 testes: banco de perguntas (60 ativas, IDs únicos, gabarito, pendentes inativas), sorteio (10 perguntas, distribuição,
 sem duplicatas, embaralhamento preservando a correta, posições variadas, inativas excluídas, anti-repetição),
 pontuação e faixas de mensagem, tempo esgotado, conclusão, reinício por inatividade (partida e tela de cursos),
 persistência no IndexedDB, estatísticas/CSV (por pergunta, por tema e por perfil), perfil anônimo, pesquisa (fluxo,
-comparação, relatório), PIN, fluxos completos do jogo e do painel administrativo e a Pesquisa Massa FM (máscara e validação de telefone, sugestões de nome,
-fluxo do participante, consentimento, telefone duplicado por evento, falha de gravação, inatividade, tipos de pergunta,
-filtros, totais, CSV, anonimização e as seções do painel).
+comparação, relatório), PIN e fluxos completos do jogo e do painel administrativo.
 `npm run verify:offline` confere o pré-cache do Service Worker.

@@ -1,6 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { useCallback, useEffect, useReducer, useRef } from 'react';
-import { enterFullscreen, useSecretCorner } from '../hooks/kiosk';
+import { useCallback, useEffect, useReducer, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { useAppData } from '../store/AppDataContext';
 import { gameReducer, initialGameState, sessionToRecord } from '../store/gameReducer';
 import { selectQuestions } from '../game/selection';
@@ -19,6 +18,36 @@ import { ProfileScreen } from './ProfileScreen';
 import { QuestionScreen } from './QuestionScreen';
 import { ResultScreen } from './ResultScreen';
 import { CoursesScreen } from './CoursesScreen';
+
+function enterFullscreen() {
+  const el = document.documentElement;
+  if (document.fullscreenElement || !el.requestFullscreen) return;
+  el.requestFullscreen({ navigationUI: 'hide' })
+    .then(() => (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> })?.lock?.('portrait'))
+    .catch(() => {});
+}
+
+/**
+ * Toques rápidos no canto superior esquerdo abrem o acesso administrativo (com PIN).
+ * Detectado pela posição do toque, sem camada por cima: o logotipo, que fica nesse
+ * canto na tela de pergunta, continua tocável.
+ */
+function useSecretCorner(taps = 5, windowMs = 3000, sizeRem = 4.5) {
+  const hits = useRef<number[]>([]);
+  return useCallback((e: ReactPointerEvent<HTMLElement>) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const x = (Number(e.clientX) || 0) - box.left;
+    const y = (Number(e.clientY) || 0) - box.top;
+    if (x > sizeRem * rem || y > sizeRem * rem) return;
+    const now = Date.now();
+    hits.current = [...hits.current.filter((t) => now - t < windowMs), now];
+    if (hits.current.length >= taps) {
+      hits.current = [];
+      window.location.hash = '#/admin';
+    }
+  }, [taps, windowMs, sizeRem]);
+}
 
 export function GameApp() {
   const { settings, questions } = useAppData();
