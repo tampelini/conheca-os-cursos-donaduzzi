@@ -1,13 +1,16 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { GameRecord } from '../types';
+import type { MassaParticipant } from '../massa/types';
 
 interface QuizDB extends DBSchema {
   kv: { key: string; value: unknown };
   games: { key: string; value: GameRecord; indexes: { startedAt: number } };
+  /** Participantes da Pesquisa Massa FM (dados pessoais, com consentimento). */
+  participants: { key: string; value: MassaParticipant; indexes: { eventId: string; createdAt: number } };
 }
 
 const DB_NAME = 'conheca-os-cursos-donaduzzi';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBPDatabase<QuizDB> | null> | null = null;
 
@@ -15,6 +18,7 @@ let dbPromise: Promise<IDBPDatabase<QuizDB> | null> | null = null;
 // o jogo continua funcionando com armazenamento em memória.
 const memoryKV = new Map<string, unknown>();
 const memoryGames = new Map<string, GameRecord>();
+const memoryParticipants = new Map<string, MassaParticipant>();
 
 function getDB(): Promise<IDBPDatabase<QuizDB> | null> {
   if (!dbPromise) {
@@ -27,6 +31,11 @@ function getDB(): Promise<IDBPDatabase<QuizDB> | null> {
             if (!db.objectStoreNames.contains('games')) {
               const store = db.createObjectStore('games', { keyPath: 'id' });
               store.createIndex('startedAt', 'startedAt');
+            }
+            if (!db.objectStoreNames.contains('participants')) {
+              const store = db.createObjectStore('participants', { keyPath: 'id' });
+              store.createIndex('eventId', 'eventId');
+              store.createIndex('createdAt', 'createdAt');
             }
           },
         });
@@ -85,13 +94,46 @@ export async function clearGames(): Promise<void> {
   if (db) await db.clear('games');
 }
 
+// ---------- Participantes da Pesquisa Massa FM ----------
+// Diferente das partidas do quiz, aqui uma falha de gravação é propagada: o totem
+// precisa saber que não salvou para manter o preenchimento na tela.
+
+export async function putParticipant(p: MassaParticipant): Promise<void> {
+  const db = await getDB();
+  if (!db) {
+    memoryParticipants.set(p.id, p);
+    return;
+  }
+  await db.put('participants', p);
+}
+
+export async function getAllParticipants(): Promise<MassaParticipant[]> {
+  const db = await getDB();
+  if (!db) return [...memoryParticipants.values()].sort((a, b) => a.createdAt - b.createdAt);
+  return db.getAllFromIndex('participants', 'createdAt');
+}
+
+export async function getParticipantsByEvent(eventId: string): Promise<MassaParticipant[]> {
+  const db = await getDB();
+  if (!db) return [...memoryParticipants.values()].filter((p) => p.eventId === eventId);
+  return db.getAllFromIndex('participants', 'eventId', eventId);
+}
+
+export async function deleteParticipant(id: string): Promise<void> {
+  memoryParticipants.delete(id);
+  const db = await getDB();
+  if (db) await db.delete('participants', id);
+}
+
 /** Apenas para testes. */
 export async function __resetDBForTests(): Promise<void> {
   const db = await getDB();
   if (db) {
     await db.clear('kv');
     await db.clear('games');
+    await db.clear('participants');
   }
   memoryKV.clear();
   memoryGames.clear();
+  memoryParticipants.clear();
 }

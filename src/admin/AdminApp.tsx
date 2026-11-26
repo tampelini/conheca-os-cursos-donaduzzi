@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BarChart3, GraduationCap, KeyRound, ListChecks, LogOut, Settings as SettingsIcon } from 'lucide-react';
+import { BarChart3, GraduationCap, Info, KeyRound, ListChecks, LogOut, Radio, Settings as SettingsIcon } from 'lucide-react';
 import { useIdle } from '../hooks/useIdle';
 import { AdminGate } from './AdminGate';
 import { QuestionsTab } from './QuestionsTab';
@@ -7,6 +7,8 @@ import { CoursesTab } from './CoursesTab';
 import { SettingsTab } from './SettingsTab';
 import { StatsTab } from './StatsTab';
 import { SecurityTab } from './SecurityTab';
+import { MassaAdmin } from '../massa/admin/MassaAdmin';
+import { AboutPanel } from '../massa/admin/AboutPanel';
 
 const TABS = [
   { id: 'questions', label: 'Perguntas', Icon: ListChecks },
@@ -14,6 +16,8 @@ const TABS = [
   { id: 'settings', label: 'Configurações', Icon: SettingsIcon },
   { id: 'stats', label: 'Estatísticas', Icon: BarChart3 },
   { id: 'security', label: 'Segurança', Icon: KeyRound },
+  { id: 'massa', label: 'Pesquisa Massa FM', Icon: Radio },
+  { id: 'about', label: 'Sobre o sistema', Icon: Info },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -36,9 +40,9 @@ export default function AdminApp() {
     <div className="admin-root bg-bg text-ink">
       <header className="sticky top-0 z-20 border-b border-primary/20 bg-bg/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
-          <h1 className="mr-auto font-display text-xl font-bold">Painel administrativo — Conheça os Cursos</h1>
+          <h1 className="mr-auto font-display text-xl font-bold">Painel administrativo</h1>
           <button type="button" onClick={exitAdmin} className="flex min-h-[44px] items-center gap-2 rounded-lg bg-primary px-4 font-semibold text-bg">
-            <LogOut className="h-5 w-5" aria-hidden="true" /> Sair e voltar ao jogo
+            <LogOut className="h-5 w-5" aria-hidden="true" /> Sair e voltar ao totem
           </button>
         </div>
         <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-2" aria-label="Seções">
@@ -63,6 +67,8 @@ export default function AdminApp() {
         {tab === 'settings' && <SettingsTab />}
         {tab === 'stats' && <StatsTab />}
         {tab === 'security' && <SecurityTab />}
+        {tab === 'massa' && <MassaAdmin />}
+        {tab === 'about' && <AboutPanel />}
       </main>
     </div>
   );
